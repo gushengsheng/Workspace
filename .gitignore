@@ -1,0 +1,15 @@
+# build output
+bin/
+obj/
+
+# IDE
+.vs/
+*.user
+*.suo
+
+# development screenshots kept in the repo root, not part of the app
+/*.png
+
+# OS junk
+Thumbs.db
+.DS_Store

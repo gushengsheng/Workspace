@@ -1,0 +1,20 @@
+<Window x:Class="Workspace.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:wv2="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
+        Title="Workspace"
+        Icon="/assets/icon.ico"
+        Width="1440" Height="900" MinWidth="720" MinHeight="460"
+        WindowStyle="None" ResizeMode="CanResize"
+        WindowStartupLocation="CenterScreen"
+        Background="#FBFBFD"
+        UseLayoutRounding="True"
+        TextOptions.TextFormattingMode="Display">
+    <WindowChrome.WindowChrome>
+        <WindowChrome CaptionHeight="0" ResizeBorderThickness="0" GlassFrameThickness="0"
+                      CornerRadius="0" UseAeroCaptionButtons="False" />
+    </WindowChrome.WindowChrome>
+    <Grid>
+        <wv2:WebView2 x:Name="Web" DefaultBackgroundColor="#FBFBFD" />
+    </Grid>
+</Window>

@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Workspace</title>
+  <script>
+    // Registered before any module runs, so a load-time failure still gets recorded.
+    window.__errs = [];
+    window.addEventListener('error', function (e) {
+      window.__errs.push((e.message || e.type) + ' @ ' + (e.filename || '?') + ':' + (e.lineno || 0));
+    }, true);
+    window.addEventListener('unhandledrejection', function (e) {
+      window.__errs.push('rejection: ' + ((e.reason && e.reason.message) || e.reason));
+    });
+  </script>
+  <link rel="stylesheet" href="vendor/katex/katex.min.css" />
+  <link rel="stylesheet" href="css/app.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="titlebar" id="titlebar">
+      <div class="lights">
+        <button class="light close"  data-win="close" title="关闭"></button>
+        <button class="light min"    data-win="min"   title="最小化"></button>
+        <button class="light max"    data-win="max"   title="最大化"></button>
+      </div>
+      <div class="titlebar-mid">
+        <span class="app-mark">◇</span>
+        <span id="win-title" class="app-title">Workspace</span>
+      </div>
+      <div class="titlebar-right">
+        <button class="icon-btn" id="btn-theme" title="浅色 / 深色">◐</button>
+        <button class="icon-btn" id="btn-settings" title="设置">⚙</button>
+      </div>
+    </header>
+
+    <main class="shell">
+      <aside class="sidebar">
+        <div class="side-scroll" id="sidebar"></div>
+        <div class="side-foot">
+          <button class="ghost-btn wide" id="btn-new-project">＋ 新建项目</button>
+        </div>
+      </aside>
+
+      <section class="stage">
+        <div class="stage-head">
+          <div class="seg" id="view-seg">
+            <button class="seg-item active" data-view="canvas">画布</button>
+            <button class="seg-item" data-view="ledger">账本</button>
+          </div>
+          <div class="stage-title" id="stage-title">未打开项目</div>
+          <div class="stage-actions">
+            <button class="icon-btn narrow-only" id="btn-sidebar" title="侧栏">☰</button>
+            <button class="icon-btn" id="btn-inspector" title="检查器">▤</button>
+            <button class="icon-btn" id="btn-search" title="搜索 (Ctrl+K)">⌕</button>
+            <button class="icon-btn" id="btn-fit" title="适配画布">⤢</button>
+            <button class="icon-btn" id="btn-add-entry" title="新建条目 (N)">＋</button>
+          </div>
+        </div>
+        <div class="stage-body">
+          <div class="view" id="view-canvas">
+            <div class="canvas-viewport" id="viewport">
+              <div class="canvas-world" id="world">
+                <svg class="edge-layer" id="edge-layer"></svg>
+                <div class="blocks" id="blocks"></div>
+              </div>
+              <div class="canvas-empty" id="canvas-empty">
+                <div class="empty-card">
+                  <div class="empty-title">还没有打开项目</div>
+                  <div class="empty-sub">新建一个项目</div>
+                  <button class="primary-btn" id="btn-empty-new">新建项目</button>
+                </div>
+              </div>
+              <div class="zoom-ctl" id="zoom-ctl">
+                <button data-zoom="out" title="缩小 (Ctrl+-)">−</button>
+                <button data-zoom="reset" id="zoom-label" title="回到 100% (Ctrl+0)">100%</button>
+                <button data-zoom="in" title="放大 (Ctrl+=)">＋</button>
+                <button data-zoom="fit" title="适配画布 (Ctrl+0)">⤢</button>
+              </div>
+            </div>
+          </div>
+          <div class="view hidden" id="view-ledger"></div>
+        </div>
+      </section>
+
+      <aside class="inspector" id="inspector"></aside>
+    </main>
+  </div>
+
+  <div id="toast-host" class="toast-host"></div>
+  <div id="modal-host" class="modal-host hidden"></div>
+
+  <!-- Window edges: the page owns the whole client area, so drag/resize comes from here. -->
+  <div class="wresize">
+    <div class="wr n"  data-edge="t"></div>
+    <div class="wr s"  data-edge="b"></div>
+    <div class="wr w"  data-edge="l"></div>
+    <div class="wr e"  data-edge="r"></div>
+    <div class="wr nw" data-edge="tl"></div>
+    <div class="wr ne" data-edge="tr"></div>
+    <div class="wr sw" data-edge="bl"></div>
+    <div class="wr se" data-edge="br"></div>
+  </div>
+  <pre id="boot-error" class="hidden" style="position:fixed;left:12px;bottom:12px;max-width:70vw;max-height:40vh;overflow:auto;background:#2b1d1d;color:#ffb4b4;padding:12px;border-radius:10px;font:11px/1.5 Consolas,monospace;z-index:9999;white-space:pre-wrap"></pre>
+
+  <script src="vendor/katex/katex.min.js"></script>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
