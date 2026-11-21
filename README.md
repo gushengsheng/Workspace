@@ -79,6 +79,38 @@ dotnet publish .\workspace.csproj -c Release -o "$env:LOCALAPPDATA\workspace\app
 | 设为紧急 | 条目检查器里点 ⚡，然后选 A / B / C |
 | 搜索 | Ctrl+K |
 
+## English-only
+
+一个开关（标题栏 `EN`）、一种态度：条目尽量用英文写。中文不拦你，但会被标出来。
+
+| 层 | 什么时候动 | 你看到什么 | 花 token 吗 |
+|---|---|---|---|
+| 本地检测 | 每次输入 | 正文里的中文加橙色虚线下划线；左栏条目行一个「中」、项目名后「中 N」= 还有中文的条目数 | 不花 |
+| 建议 | 停手约 0.9 秒 | 光标所在段落里的中文 → 一条「自然」+ 一条「简洁」英文，点一下只替换那一段 | 约 350 / 次 |
+| 检查与优化 | 条目检查器里的按钮 | 英文条目：语法错（错）+ 改进（改）；整段中文的条目：直接给英文改写（译），逐条「应用」或「全部应用」 | 约 500–1500 / 次 |
+
+- 替换走 textarea 原生 `setRangeText`，撤销还在；模型只提议，不会自己写盘。
+- 关掉 `EN` = 关掉自动建议和全部标色；「检查与优化」按钮还在，手动能用。
+- 同一段文字 + 同样上下文，十分钟内再问不花钱（内存缓存）。
+- 超过 8000 字符的条目拒绝检查，先分节。
+- 一条中文 → 两条英文时，如果模型给了重复的两条，会再要一次不同说法。
+
+### 模型
+
+设置 → English：
+
+| 项 | 默认 | 说明 |
+|---|---|---|
+| 服务地址 | `https://api.deepseek.com` | 任何 OpenAI 兼容端点：本地 Ollama `http://127.0.0.1:11434`、LM Studio 都行 |
+| 模型 | `deepseek-chat` | 端点有什么填什么 |
+| API Key | — | 只存本机 `%APPDATA%\workspace\secret.bin`，Windows DPAPI 按当前账户加密；**不写进 index.json** |
+| 停手多久后给建议 | 900 ms | 300–5000 |
+| 自动建议 | 开 | 关掉就只在点按钮时问模型 |
+
+「测试连接」会先保存设置，再发一个 16 token 的探针请求。累计 token 在设置里看，可清零。
+
+`%APPDATA%\workspace\secret.bin` 就是那把 key（加密后的）。删掉它等于删 key。
+
 ## 紧急任务
 
 只有三档：**A 最急、B 一般、C 可缓**。没有计时、没有死线、没有提醒。左栏和账本都按 A→B→C 排序，点一下就是完成。
@@ -89,6 +121,7 @@ dotnet publish .\workspace.csproj -c Release -o "$env:LOCALAPPDATA\workspace\app
 - 卡片底部的路径在窄卡片上会溢出。
 - 环境里的脚本会真的执行命令，第一次拿只读命令试。
 - 「枚举」模式里换了一批文件后，勾选记录按路径保存，路径变了就失效。
+- English-only 一次只检查当前打开的条目，还没有「扫全项目」。
 
 ## 改前端
 
@@ -104,14 +137,16 @@ robocopy .\assets "$env:LOCALAPPDATA\workspace\app\assets" /E
 
 ```
 App.xaml(.cs)            入口、单实例（第二次启动会把已有窗口叫到前台）
-MainWindow.xaml(.cs)     窗口 + WebView2 宿主 + 原生拖放 + 最小尺寸 + 自检(--diag)
+MainWindow.xaml(.cs)     窗口 + WebView2 宿主 + 原生拖放 + 最小尺寸 + 自检(--diag / --probe 脚本)
 src/Model.cs             模型：条目 / 块 / 连线 / 环境(EnvFunc) / 任务
 src/Store.cs             JSON 落盘、原子写、运行记录
 src/Openers.cs           外部程序适配器（Dual PDF 走它的启动器 + DP_OPEN）
 src/EnvRunner.cs         环境 → 具体步骤：连线展开、选择器匹配、脚本执行
-src/Bridge.cs            页面 ↔ 宿主 通道；文库变化监听
+src/Bridge.cs            页面 ↔ 宿主 通道；文库变化监听；ai.* 转发
+src/Ai.cs                模型通道：OpenAI 兼容请求、DPAPI 存 key、三段提示词
 assets/js/canvas.js      画布引擎：块、边、缩放、框选、复制、连线即作用项
 assets/js/app.js         侧栏 / 检查器 / 账本 / 环境 / 子文库 / 任务 / 搜索 / 拖放
+assets/js/english.js     中文检测、建议条、检查卡（English-only）
 assets/js/md.js          Markdown 渲染（含 $...$ 公式）
 tools/seed-demo.js       生成演示项目（可删）
 ```

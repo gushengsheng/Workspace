@@ -156,9 +156,25 @@ public partial class MainWindow : Window
                     core.NavigateToString(html);
                     return;
                 }
+                // --probe <file.js> runs one script after the page settles and logs
+                // its string result. Same contract as --diag: opt-in, read-only.
+                var argv = Environment.GetCommandLineArgs();
+                var probeAt = Array.IndexOf(argv, "--probe");
+                if (probeAt >= 0 && probeAt + 1 < argv.Length && File.Exists(argv[probeAt + 1]))
+                {
+                    try
+                    {
+                        await Task.Delay(2200);
+                        var script = File.ReadAllText(argv[probeAt + 1], System.Text.Encoding.UTF8);
+                        var result = await core.ExecuteScriptAsync(script);
+                        Store.Log("probe " + result);
+                    }
+                    catch (Exception ex) { Store.Log("probe failed " + ex.Message); }
+                    return;
+                }
+
                 // Self check, opt-in with --diag: never touches selection or state.
-                if (!Environment.GetCommandLineArgs().Contains("--diag")) return;
-                try
+                if (!Environment.GetCommandLineArgs().Contains("--diag")) return;                try
                 {
                     await Task.Delay(1500);
                     var probe = @"(function(){var q=function(s){var e=document.querySelector(s);return e?Math.round(e.getBoundingClientRect().width):-1};

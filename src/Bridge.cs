@@ -43,8 +43,14 @@ public class Bridge
 
             case "app.saveSettings":
                 {
-                    var s = Json.R<Settings>(p.GetProperty("settings"));
-                    Store.Idx.Settings = s ?? new Settings();
+                    var incoming = Json.R<Settings>(p.GetProperty("settings")) ?? new Settings();
+                    var current = Store.Idx.Settings ?? new Settings();
+                    // The page holds a copy from launch time. Counters and window
+                    // geometry belong to the host, so a stale copy must not reset them.
+                    incoming.AiTokens = current.AiTokens;
+                    if (incoming.WinW <= 0) incoming.WinW = current.WinW;
+                    if (incoming.WinH <= 0) incoming.WinH = current.WinH;
+                    Store.Idx.Settings = incoming;
                     Store.SaveIndex();
                     return new { ok = true };
                 }
@@ -428,6 +434,28 @@ public class Bridge
             case "win.resize": _win.StartWindowResize(Str(p, "edge")); return new { ok = true };
             case "win.close": _win.Close(); return new { ok = true };
             case "win.state": return new { maximized = _win.WindowState == WindowState.Maximized };
+
+            // ----------------------------------------------------- english coach
+            case "ai.status":
+                return Ai.Status();
+
+            case "ai.saveKey":
+                {
+                    Ai.SaveKey(Str(p, "key"));
+                    return new { ok = true, hasKey = Ai.HasKey() };
+                }
+
+            case "ai.test":
+                return await Ai.Test();
+
+            case "ai.resetTokens":
+                return Ai.ResetTokens();
+
+            case "ai.suggest":
+                return await Ai.Suggest(Str(p, "draft"), Str(p, "fragment"), Str(p, "left"), Str(p, "right"));
+
+            case "ai.check":
+                return await Ai.Check(Str(p, "text"));
 
             case "log":
                 Store.Log(Str(p, "msg"));

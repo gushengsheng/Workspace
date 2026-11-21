@@ -1,6 +1,7 @@
 import { call, onHostEvent } from './bridge.js';
 import { Canvas, fmtAgo, fmtSize } from './canvas.js';
 import { renderMd, excerpt } from './md.js';
+import { createCoach, cjkCount, hasChinese, markChinese } from './english.js';
 
 window.__booted = 'app.js loaded';
 
@@ -79,6 +80,9 @@ const S = {
 
 let canvas = null;
 let saveTimer = null;
+
+/** The English-only philosophy: one switch, nothing else asks twice. */
+const englishOn = () => S.settings.englishOnly !== false;
 
 /* --------------------------------------------------------------- persistence */
 function save(immediate = false) {
@@ -273,6 +277,7 @@ function renderSidebar() {
       },
         h('span', { class: 'glyph' }, '✎'),
         h('span', { class: 'label' }, e.title || '未命名'),
+        (englishOn() && hasChinese(e.body)) ? h('span', { class: 'zh-dot', title: cjkCount(e.body) + ' 个中文字' }, '中') : null,
         h('span', { class: 'sub' }, fmtAgo(e.updatedAt))
       ));
     }
@@ -346,6 +351,8 @@ function renderSidebar() {
       }
     }
   }
+
+  if (S.project) renderStageTitle();
 }
 
 const LEVEL_ORDER = { A: 0, B: 1, C: 2 };
@@ -355,7 +362,13 @@ function sortTasks(list) {
 
 /* ---------------------------------------------------------------- stage title */
 function renderStageTitle() {
-  $('#stage-title').textContent = S.project ? S.project.name : '未打开项目';
+  const el = $('#stage-title');
+  el.innerHTML = '';
+  el.append(document.createTextNode(S.project ? S.project.name : '未打开项目'));
+  if (S.project && englishOn()) {
+    const left = (S.project.entries || []).filter((e) => hasChinese(e.body)).length;
+    if (left) el.append(h('span', { class: 'zh-count', title: '还有中文的条目，点开可以逐个改' }, '中 ' + left));
+  }
   $('#canvas-empty').classList.toggle('show', !S.project);
 }
 
@@ -791,13 +804,18 @@ function renderEntryInspector(box, e) {
       e.body = editor.value; e.updatedAt = Date.now();
       save(); renderSidebarSoon();
       clearTimeout(mdRenderTimer);
-      mdRenderTimer = setTimeout(() => { if (S.mdMode === 'render') viewBox.innerHTML = renderMd(e.body); }, 260);
+      mdRenderTimer = setTimeout(() => {
+        if (S.mdMode !== 'render') return;
+        viewBox.innerHTML = renderMd(e.body);
+        if (englishOn()) markChinese(viewBox);
+      }, 260);
       canvas.touchAll();
     }
   });
   editor.value = e.body || '';
 
   const viewBox = h('div', { class: 'md-view md', html: renderMd(e.body || '') });
+  if (englishOn()) markChinese(viewBox);
   const srcBtn = h('button', { class: 'active' }, '源码');
   const renBtn = h('button', {}, '渲染');
   const setMode = (mode) => {
@@ -806,15 +824,35 @@ function renderEntryInspector(box, e) {
     renBtn.classList.toggle('active', mode === 'render');
     editor.classList.toggle('hidden', mode !== 'source');
     viewBox.classList.toggle('hidden', mode !== 'render');
-    if (mode === 'render') viewBox.innerHTML = renderMd(e.body || '');
+    if (mode === 'render') {
+      viewBox.innerHTML = renderMd(e.body || '');
+      if (englishOn()) markChinese(viewBox);
+    }
   };
   srcBtn.onclick = () => setMode('source');
   renBtn.onclick = () => setMode('render');
   setMode(S.mdMode);
 
+  // The coach rewrites whole values, so the entry has to be written back here —
+  // the textarea keeps its native undo, the model only proposes.
+  const commitBody = (next) => {
+    e.body = next; e.updatedAt = Date.now();
+    save(); renderSidebarSoon();
+    viewBox.innerHTML = renderMd(e.body || '');
+    if (englishOn()) markChinese(viewBox);
+    canvas.touchAll();
+  };
+
+  const coach = createCoach({
+    h, call, toast, editor,
+    getSettings: () => S.settings,
+    onChange: commitBody,
+    ensureSource: () => setMode('source')
+  });
+
   box.append(sec('正文',
     h('div', { class: 'md-bar' }, h('div', { class: 'md-mode' }, srcBtn, renBtn)),
-    editor, viewBox
+    editor, viewBox, coach.strip
   ));
 
   // --- urgent
@@ -1463,8 +1501,11 @@ function openSearch() {
 }
 
 /* ----------------------------------------------------------------- settings */
-function openSettings() {
+async function openSettings() {
   const s = S.settings;
+  let st = { hasKey: false, tokens: 0 };
+  try { st = await call('ai.status'); } catch { }
+
   const dual = h('input', { class: 'field mono', value: s.dualPdfHome || '', placeholder: 'Dual PDF 的目录（含 local/start.cjs）', style: { width: '100%' } });
   const pdfOpener = h('select', { class: 'field' },
     h('option', { value: 'dual-pdf', selected: s.pdfOpener === 'dual-pdf' }, 'Dual PDF'),
@@ -1475,33 +1516,114 @@ function openSettings() {
     h('option', { value: 'notepad', selected: s.textOpener === 'notepad' }, '记事本'),
     h('option', { value: 'vscode', selected: s.textOpener === 'vscode' }, 'VS Code')
   );
+
+  // ---- English-only
+  const enChk = h('input', { type: 'checkbox', class: 'chk' });
+  enChk.checked = s.englishOnly !== false;
+  const autoChk = h('input', { type: 'checkbox', class: 'chk' });
+  autoChk.checked = s.aiAutoSuggest !== false;
+  const base = h('input', { class: 'field mono', value: s.aiBaseUrl || 'https://api.deepseek.com', placeholder: 'https://api.deepseek.com', style: { width: '100%' } });
+  const model = h('input', { class: 'field mono', value: s.aiModel || 'deepseek-chat', placeholder: 'deepseek-chat', style: { width: '100%' } });
+  const keyInput = h('input', {
+    class: 'field mono', type: 'password', style: { width: '100%' },
+    placeholder: st.hasKey ? '已保存（留空则不改）' : 'sk-… 只存在本机，DPAPI 加密'
+  });
+  const delay = h('input', { class: 'field', type: 'number', min: '300', max: '5000', step: '100', value: String(s.aiDelayMs || 900), style: { width: '110px' } });
+  const tokenText = h('span', { class: 'sub' }, (st.tokens || 0) + ' tok');
+
+  const saveAi = async () => {
+    s.englishOnly = enChk.checked;
+    s.aiAutoSuggest = autoChk.checked;
+    s.aiBaseUrl = (base.value || '').trim() || 'https://api.deepseek.com';
+    s.aiModel = (model.value || '').trim() || 'deepseek-chat';
+    s.aiDelayMs = Math.max(300, Math.min(5000, Number(delay.value) || 900));
+    await saveSettings();
+    const typed = (keyInput.value || '').trim();
+    if (typed) { await call('ai.saveKey', { key: typed }); keyInput.value = ''; }
+  };
+
+  const testBtn = h('button', {
+    class: 'ghost-btn sm',
+    onclick: async () => {
+      testBtn.disabled = true;
+      testBtn.textContent = '测试中…';
+      try {
+        await saveAi();
+        const r = await call('ai.test');
+        toast('模型连通 · ' + (r.text || 'OK'), 'ok');
+        st = await call('ai.status');
+        tokenText.textContent = (st.tokens || 0) + ' tok';
+      } catch (e) { toast('测试失败：' + e.message, 'err'); }
+      testBtn.disabled = false;
+      testBtn.textContent = '测试连接';
+    }
+  }, '测试连接');
+
+  const group = (title, ...kids) => h('div', { class: 'set-group' }, h('div', { class: 'set-title' }, title), ...kids);
+
   modal({
     title: '设置',
+    wide: true,
     body: h('div', {},
-      h('div', { class: 'field-label' }, '打开 PDF 用'),
-      h('div', { class: 'field-row' }, pdfOpener),
-      h('div', { class: 'field-label' }, 'Dual PDF 目录'),
-      h('div', { class: 'field-row' }, dual),
-      h('button', {
-        class: 'ghost-btn sm', style: { marginBottom: '12px' },
-        onclick: async () => {
-          const p = await call('pick.folder');
-          if (p) dual.value = p;
-        }
-      }, '选择目录…'),
-      h('div', { class: 'field-label' }, '打开文本 / 代码用'),
-      h('div', { class: 'field-row' }, textOpener),
-      h('div', { class: 'field-label' }, '数据目录'),
-      h('div', { class: 'path-box', style: { marginBottom: '10px' } }, S.dataDir)
+      group('文件',
+        h('div', { class: 'field-label' }, '打开 PDF 用'),
+        h('div', { class: 'field-row' }, pdfOpener),
+        h('div', { class: 'field-label' }, 'Dual PDF 目录'),
+        h('div', { class: 'field-row' }, dual),
+        h('button', {
+          class: 'ghost-btn sm', style: { marginBottom: '12px' },
+          onclick: async () => {
+            const p = await call('pick.folder');
+            if (p) dual.value = p;
+          }
+        }, '选择目录…'),
+        h('div', { class: 'field-label' }, '打开文本 / 代码用'),
+        h('div', { class: 'field-row' }, textOpener)
+      ),
+      group('English',
+        h('label', { class: 'set-row' }, enChk, h('span', {}, 'English-only：在条目里标出中文，并给英文建议')),
+        h('label', { class: 'set-row' }, autoChk, h('span', {}, '停手后自动给建议（关掉则只手动检查）')),
+        h('div', { class: 'field-label' }, '服务地址（OpenAI 兼容）'),
+        h('div', { class: 'field-row' }, base),
+        h('div', { class: 'field-label' }, '模型'),
+        h('div', { class: 'field-row' }, model),
+        h('div', { class: 'field-label' }, 'API Key'),
+        h('div', { class: 'field-row' }, keyInput),
+        h('div', { class: 'field-row' },
+          testBtn,
+          st.hasKey ? h('button', {
+            class: 'ghost-btn sm',
+            onclick: async () => {
+              await call('ai.saveKey', { key: '' });
+              st = await call('ai.status');
+              toast('已删除 key', 'ok');
+            }
+          }, '删除 key') : null
+        ),
+        h('div', { class: 'field-label' }, '停手多久后给建议（毫秒）'),
+        h('div', { class: 'field-row' }, delay),
+        h('div', { class: 'field-row', style: { alignItems: 'center' } },
+          h('span', { class: 'sub' }, '已用 '), tokenText,
+          h('button', {
+            class: 'ghost-btn sm',
+            onclick: async () => {
+              await call('ai.resetTokens');
+              st = await call('ai.status');
+              tokenText.textContent = '0 tok';
+            }
+          }, '清零')
+        )
+      ),
+      group('数据', h('div', { class: 'path-box' }, S.dataDir))
     ),
     buttons: [
       { label: '取消', fn: (c) => c() },
       { label: '保存', primary: true, fn: async (c) => {
-        s.dualPdfHome = dual.value.trim();
-        s.pdfOpener = pdfOpener.value;
-        s.textOpener = textOpener.value;
-        await saveSettings(); c(); toast('已保存', 'ok');
-      } }
+          await saveAi();
+          c(); toast('已保存', 'ok');
+          paintEnglish();
+          renderSidebar(); renderInspector();
+        } }
     ]
   });
 }
@@ -1511,6 +1633,29 @@ function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
   S.settings.theme = theme;
   saveSettings();
+}
+
+/* ------------------------------------------------------------------ en pill */
+// The philosophy needs exactly one visible switch; everything else is a nudge.
+const enBtn = $('#btn-en');
+
+function paintEnglish() {
+  if (!enBtn) return;
+  enBtn.classList.toggle('on', englishOn());
+  enBtn.title = englishOn() ? 'English-only 已开 · 点一下关掉' : 'English-only 已关 · 点一下打开';
+}
+
+function wireEnglish() {
+  if (!enBtn) return;
+  enBtn.onclick = () => {
+    S.settings.englishOnly = !englishOn();
+    saveSettings();
+    paintEnglish();
+    renderSidebar();
+    renderInspector();
+    toast(englishOn() ? 'English-only 已开' : 'English-only 已关', 'ok');
+  };
+  paintEnglish();
 }
 
 /* --------------------------------------------------------------- native drop */
@@ -1657,6 +1802,7 @@ async function init() {
   S.dataDir = info.dataDir || '';
   if (info.dualDetected && !S.settings.dualPdfHome) S.settings.dualPdfHome = info.dualDetected;
   applyTheme(S.settings.theme || 'light');
+  wireEnglish();
 
   canvas = new Canvas({
     viewport: $('#viewport'),
@@ -1803,7 +1949,7 @@ async function init() {
   });
 
   // Handy for the host self-check and for debugging from the console.
-  window.__ws = { get state() { return S; }, canvas, renderInspector, renderSidebar, renderLedger, newEntry, call };
+  window.__ws = { get state() { return S; }, canvas, renderInspector, renderSidebar, renderLedger, newEntry, openSettings, call };
 }
 
 function openBlock(b) {

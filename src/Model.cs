@@ -37,6 +37,14 @@ public class Settings
     public string LastProjectId { get; set; } = "";
     public double WinW { get; set; } = 1440;
     public double WinH { get; set; } = 900;
+
+    // ---- English-only. The key itself lives in secret.bin (DPAPI), never here.
+    public bool EnglishOnly { get; set; } = true;
+    public bool AiAutoSuggest { get; set; } = true;
+    public string AiBaseUrl { get; set; } = "https://api.deepseek.com";
+    public string AiModel { get; set; } = "deepseek-chat";
+    public int AiDelayMs { get; set; } = 900;
+    public long AiTokens { get; set; }
 }
 
 public class ProjectRef
